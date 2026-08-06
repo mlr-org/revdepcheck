@@ -1,5 +1,14 @@
 # 1.0.0.9002
 
+* Installing the dependencies of a revdep no longer fails with "there is no
+  package called `callr`". crancache calls `callr::rcmd()` to add a package it
+  has built to the cache, and callr calls `otel::`, both while the library path
+  is replaced by the library that is being installed into, where neither
+  package is visible. Both are now loaded before the library path is replaced.
+  This showed up mostly with several workers, because the cache only builds a
+  binary for a package that was installed from source, and it was reported as a
+  `PREPERROR` for the revdep even though its dependencies had installed fine.
+
 * `problems.md` no longer claims "Wow, no problems at all. :)" when revdeps
   failed to check. It now reports how many packages could not be checked, why,
   and points at `failures.md`.

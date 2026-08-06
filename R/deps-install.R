@@ -9,8 +9,17 @@ deps_install_opts <- function(
   quiet = FALSE,
   env = character()
 ) {
-  func <- function(libdir, packages, quiet, repos) {
+  func <- function(libdir, packages, quiet, repos, preload) {
     ip <- crancache::install_packages
+
+    ## See `lazy_install_deps()`. We get the packages to load as an argument,
+    ## because callr sets the environment of this function to the global
+    ## environment before it transports it to the worker, so it cannot call
+    ## revdepcheck's own functions.
+    for (pkg in preload) {
+      tryCatch(loadNamespace(pkg), error = function(err) NULL)
+    }
+
     withr::with_libpaths(
       libdir,
       {
@@ -33,7 +42,8 @@ deps_install_opts <- function(
 
     list(
       libdir = dir_find(pkgdir, "pkg", pkgname),
-      quiet = quiet
+      quiet = quiet,
+      preload = lazy_install_deps()
     )
   )
 
