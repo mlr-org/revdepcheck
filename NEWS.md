@@ -15,6 +15,11 @@
   maintainer email to revdeps that failed before they could be checked, which
   happened because `desc::desc(text = NULL)` falls back to reading the
   DESCRIPTION in the working directory.
+* `cran_revdeps()` no longer silently drops reverse dependencies that list the
+  package as the very first entry of their first dependency field (typically
+  `Depends`). The match required a separator before the package name, so such
+  packages sat at position 0 of the collapsed dependency string and were never
+  matched.
 
 * Add `cran` parameter to the `get_repos()` internal and propagate it to the
   upstream functions including `revdep_check()`. It allow user to decide

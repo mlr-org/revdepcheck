@@ -32,13 +32,21 @@ cran_revdeps_versions <- function(
   alldeps <- allpkgs[, dependencies, drop = FALSE]
   alldeps[is.na(alldeps)] <- ""
   deps <- apply(alldeps, 1, paste, collapse = ",")
-  rd <- grepl(sprintf("(,| |\\n)(%s)(,| |\\n)", package), deps)
+  rd <- deps_match(deps, package)
 
   data.frame(
     stringsAsFactors = FALSE,
     package = unname(allpkgs[rd, "Package"]),
     version = unname(allpkgs[rd, "Version"])
   )
+}
+
+## Does `deps` (a collapsed dependency string) mention `package`?
+## The package name may sit at either end of the string, e.g. when it is the
+## first entry of the first dependency field, so anchors count as separators.
+
+deps_match <- function(deps, package) {
+  grepl(sprintf("(^|,| |\\n)(%s)(,| |\\n|$)", package), deps)
 }
 
 get_repos <- function(bioc, cran) {
