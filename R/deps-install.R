@@ -127,8 +127,8 @@ deps_install_done <- function(state, worker) {
     state$packages$state[wpkg] <- "done"
 
     rresult <- if (isTRUE(worker$killed)) {
-      "Process was killed while installing dependencies"
       status <- "TIMEOUT"
+      "Process was killed while installing dependencies"
     } else {
       status <- "PREPERROR"
       tryCatch(

@@ -12,10 +12,16 @@ revdep_report_checklist <- function(pkg, results, file = "") {
 pkg_links <- function(result) {
   links <- list()
 
-  desc <- tryCatch(
-    desc::desc(text = result$new$description),
-    error = function(x) NULL
-  )
+  ## Packages that failed before they were checked have no description, and
+  ## `desc(text = NULL)` would silently fall back to reading the DESCRIPTION of
+  ## the package being checked - i.e. attribute our own repo and maintainer
+  ## email to somebody else's revdep.
+  description <- result$new$description
+  desc <- if (!any(nzchar(description))) {
+    NULL
+  } else {
+    tryCatch(desc::desc(text = description), error = function(x) NULL)
+  }
   if (!is.null(desc)) {
     links[["GitHub"]] <- pkg_github(desc)
 
@@ -34,9 +40,13 @@ pkg_links <- function(result) {
   }
 
   if (length(links) == 0) {
-    # Should never get here, but just in case
-    "UNKNOWN"
-  } else {
-    unlist(links)
+    # We know nothing beyond the name, which happens when a package fails
+    # before it is ever checked
+    links[["CRAN"]] <- paste0(
+      "https://cran.r-project.org/package=",
+      result$package
+    )
   }
+
+  unlist(links)
 }
