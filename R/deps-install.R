@@ -7,9 +7,10 @@ deps_install_opts <- function(
   pkgdir,
   pkgname,
   quiet = FALSE,
-  env = character()
+  env = character(),
+  skip_suggests_failures = FALSE
 ) {
-  func <- function(libdir, packages, quiet, repos) {
+  func <- function(libdir, packages, required, quiet, repos) {
     ip <- crancache::install_packages
     withr::with_libpaths(
       libdir,
@@ -21,7 +22,25 @@ deps_install_opts <- function(
           quiet = quiet,
           repos = repos
         )
-        stopifnot(all(packages %in% rownames(installed.packages(libdir[1]))))
+        installed <- rownames(installed.packages(libdir[1]))
+
+        missing <- setdiff(required, installed)
+        if (length(missing)) {
+          stop(
+            "Failed to install dependencies: ",
+            paste(missing, collapse = ", ")
+          )
+        }
+
+        ## Non-empty only if some packages are optional, i.e. if
+        ## `skip_suggests_failures` is TRUE
+        skipped <- setdiff(packages, installed)
+        if (length(skipped)) {
+          message(
+            "Ignoring failed installation of optional packages: ",
+            paste(skipped, collapse = ", ")
+          )
+        }
       }
     )
   }
@@ -29,7 +48,11 @@ deps_install_opts <- function(
   args <- c(
     ## We don't want to install the revdep checked package again,
     ## that's in a separate library, hence the `exclude` argument
-    deps_opts(pkgname, exclude = pkg_name(pkgdir)),
+    deps_opts(
+      pkgname,
+      exclude = pkg_name(pkgdir),
+      skip_suggests_failures = skip_suggests_failures
+    ),
 
     list(
       libdir = dir_find(pkgdir, "pkg", pkgname),
@@ -52,7 +75,11 @@ deps_install_opts <- function(
   )
 }
 
-deps_opts <- function(pkgname, exclude = character()) {
+deps_opts <- function(
+  pkgname,
+  exclude = character(),
+  skip_suggests_failures = FALSE
+) {
   ## We set repos, so that dependencies from Bioconductor are installed
   ## automatically
   repos <- get_repos(bioc = TRUE, cran = TRUE)
@@ -77,8 +104,24 @@ deps_opts <- function(pkgname, exclude = character()) {
   )
   packages <- intersect(packages, available)
 
+  ## Packages that must be installed for the check to be meaningful. Failures
+  ## for the remaining (suggested) packages can be tolerated, because a
+  ## package is supposed to guard their use, e.g. with `requireNamespace()`,
+  ## and `R CMD check` is run with `_R_CHECK_FORCE_SUGGESTS_=false`.
+  required <- if (skip_suggests_failures) {
+    hard <- cran_deps(
+      pkgname,
+      repos,
+      direct = c("Depends", "Imports", "LinkingTo")
+    )
+    intersect(packages, hard)
+  } else {
+    packages
+  }
+
   list(
-    package = packages,
+    packages = packages,
+    required = required,
     repos = repos
   )
 }
@@ -94,7 +137,8 @@ deps_install_task <- function(state, task) {
     pkgdir,
     pkgname,
     quiet = state$options$quiet,
-    env = state$options$env
+    env = state$options$env,
+    skip_suggests_failures = state$options$skip_suggests_failures
   )
   px <- r_process$new(px_opts)
 
@@ -165,7 +209,18 @@ deps_install_done <- function(state, worker) {
 }
 
 # Not used by other methods, but simplifies debugging
-deps_install <- function(pkgdir, pkgname, quiet = FALSE, new_session = FALSE) {
-  px_opts <- deps_install_opts(pkgdir, pkgname, quiet = FALSE)
+deps_install <- function(
+  pkgdir,
+  pkgname,
+  quiet = FALSE,
+  new_session = FALSE,
+  skip_suggests_failures = FALSE
+) {
+  px_opts <- deps_install_opts(
+    pkgdir,
+    pkgname,
+    quiet = FALSE,
+    skip_suggests_failures = skip_suggests_failures
+  )
   execute_r(px_opts, new_session = new_session)
 }
