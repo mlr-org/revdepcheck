@@ -23,6 +23,33 @@ drop_nulls <- function(x) {
   x[!is_null]
 }
 
+## Packages that are looked up lazily while we install into a library, i.e.
+## while the library path is replaced by that library, where they are not
+## visible any more.
+##
+## crancache calls `callr::rcmd()` when it adds a package it has built to the
+## cache, from `install_packages()`'s `on.exit()`, and callr in turn calls
+## `otel::`. Neither is loaded by loading crancache: `callr` is only in
+## crancache's DESCRIPTION, not in its NAMESPACE imports, and callr does the
+## same with `otel`. So both are resolved when they are first used, which is
+## after the library path has been replaced, and the install fails with
+## "there is no package called 'callr'" - after it has installed everything.
+##
+## Loading them beforehand fixes the lookup, because a loaded namespace is
+## found regardless of the library path. Failing to load them is fine: if they
+## are not installed, crancache is not caching binaries either.
+
+lazy_install_deps <- function() {
+  c("callr", "otel")
+}
+
+load_lazy_install_deps <- function() {
+  for (pkg in lazy_install_deps()) {
+    tryCatch(loadNamespace(pkg), error = function(err) NULL)
+  }
+  invisible()
+}
+
 #' @importFrom crayon col_nchar
 
 col_align <- function(

@@ -173,6 +173,8 @@ revdep_install <- function(
   fail_on_warn <- Sys.info()[["sysname"]] != "Darwin" ||
     R.Version()$arch != "aarch64"
 
+  load_lazy_install_deps()
+
   with_envvar(
     c(CRANCACHE_REPOS = "cran,bioc", CRANCACHE_QUIET = "yes", env),
     with_libpaths(
