@@ -96,7 +96,34 @@ revdep_report_problems <- function(
     predicate = problem,
     results = results,
     bioc = bioc,
-    cran = cran
+    cran = cran,
+    empty = no_problems_message
+  )
+}
+
+## Absence of new problems only means "no problems at all" if every revdep
+## actually made it through the check. Packages that failed to install (or
+## whose dependencies failed to install) never produce a comparison, so they
+## would otherwise be silently hidden behind a cheerful message.
+no_problems_message <- function(results) {
+  failed <- map_lgl(results, function(x) !rcmdcheck_status(x) %in% c("+", "-"))
+
+  if (!any(failed)) {
+    return("*Wow, no problems at all. :)*")
+  }
+
+  reasons <- table(map_chr(results[failed], failure_reason))
+  paste0(
+    "*No new problems in the ",
+    sum(!failed),
+    " package(s) that were checked successfully.*\n\n",
+    "**However, ",
+    sum(failed),
+    " of ",
+    length(results),
+    " package(s) could not be checked, so this report is incomplete:**\n\n",
+    paste0("* ", reasons, " ", names(reasons), "\n", collapse = ""),
+    "\nSee `failures.md` for the details."
   )
 }
 
@@ -114,7 +141,7 @@ revdep_report_failures <- function(
   cran = TRUE
 ) {
   problem <- function(x) {
-    !x$status %in% c("+", "-")
+    !rcmdcheck_status(x) %in% c("+", "-")
   }
   revdep_report_if(
     pkg = pkg,
@@ -122,7 +149,8 @@ revdep_report_failures <- function(
     predicate = problem,
     results = results,
     bioc = bioc,
-    cran = cran
+    cran = cran,
+    empty = function(results) "*Wow, no failures at all. :)*"
   )
 }
 
@@ -132,7 +160,8 @@ revdep_report_if <- function(
   predicate,
   results = NULL,
   bioc = TRUE,
-  cran = TRUE
+  cran = TRUE,
+  empty = function(results) "*Wow, no problems at all. :)*"
 ) {
   if (is_string(file) && !identical(file, "")) {
     file <- file(file, encoding = "UTF-8", open = "w")
@@ -148,29 +177,36 @@ revdep_report_if <- function(
   if (sum(show)) {
     map(results[show], failure_details, file = file, bioc = bioc, cran = cran)
   } else {
-    cat("*Wow, no problems at all. :)*", file = file)
+    cat(empty(results), file = file)
   }
 
   invisible()
 }
 
 failure_details <- function(x, file = "", bioc = TRUE, cran = TRUE) {
-  cat_header(x$package, " (", x$new$version, ")", level = 1, file = file)
+  cat_header(
+    x$package,
+    " (",
+    x$new$version %||% "?",
+    ")",
+    level = 1,
+    file = file
+  )
   cat_package_info(x, file = file, bioc = bioc, cran = cran)
   cat_line(file = file)
 
   if (x$status == "E") {
     cat_header("Error before installation", level = 2, file = file)
-    cat_header("Devel", level = 3, file = file)
-    cat_line("```", file = file)
-    cat_line(line_trunc(x$new$stdout), sep = "\n", file = file)
-    cat_line(line_trunc(x$new$stderr), sep = "\n", file = file)
-    cat_line("```", file = file)
-    cat_header("CRAN", level = 3, file = file)
-    cat_line("```", file = file)
-    cat_line(line_trunc(x$old$stdout), sep = "\n", file = file)
-    cat_line(line_trunc(x$old$stderr), sep = "\n", file = file)
-    cat_line("```", file = file)
+    ## Dependency installation failures are recorded identically for both
+    ## versions, so don't print the very same output twice.
+    if (identical(x$old, x$new)) {
+      cat_error_output(x$new, file = file)
+    } else {
+      cat_header("Devel", level = 3, file = file)
+      cat_error_output(x$new, file = file)
+      cat_header("CRAN", level = 3, file = file)
+      cat_error_output(x$old, file = file)
+    }
   } else {
     rows <- x$cmp
     cat_failure_section("Newly broken", rows[rows$change == +1, ], file = file)
@@ -191,6 +227,34 @@ failure_details <- function(x, file = "", bioc = TRUE, cran = TRUE) {
   }
 
   invisible()
+}
+
+## `errormsg` holds the reason a package never made it to `R CMD check` (e.g.
+## a dependency that failed to install). It was previously dropped, which left
+## these sections empty whenever the worker itself printed nothing.
+cat_error_output <- function(x, file) {
+  parts <- list(
+    line_trunc(x$stdout),
+    line_trunc(x$stderr),
+    line_trunc(error_message(x$errormsg))
+  )
+  parts <- parts[map_lgl(parts, function(p) any(nzchar(p)))]
+
+  cat_line("```", file = file)
+  cat_line(unlist(parts) %|0|% "<no output captured>", sep = "\n", file = file)
+  cat_line("```", file = file)
+}
+
+error_message <- function(x) {
+  if (is.null(x)) {
+    character()
+  } else if (is.character(x)) {
+    x
+  } else if (is.list(x) && is.character(x$message)) {
+    x$message
+  } else {
+    paste(utils::capture.output(print(x)), collapse = "\n")
+  }
 }
 
 cat_package_info <- function(cmp, file, bioc = TRUE, cran = TRUE) {
@@ -353,7 +417,7 @@ revdep_report_cran <- function(pkg = ".", file = "", results = NULL) {
   if (any(failed)) {
     cat_line("### Failed to check", file = file)
     cat_line(file = file)
-    desc <- unname(c(i = "failed to install", t = "check timed out")[status])
+    desc <- map_chr(results, failure_reason)
     cat(
       paste0("* ", format(package[failed]), " (", desc[failed], ")\n"),
       sep = "",
@@ -364,8 +428,47 @@ revdep_report_cran <- function(pkg = ".", file = "", results = NULL) {
   invisible()
 }
 
+## Human readable explanation of why a revdep has no usable check comparison.
+## The status codes come from rcmdcheck::compare_checks(), plus "?" for the
+## packages that blew up before `R CMD check` produced parseable results.
+failure_reason <- function(x) {
+  status <- rcmdcheck_status(x) %|0|% "?"
+
+  switch(
+    status,
+    "i-" = ,
+    "i+" = "failed to install",
+    "t-" = ,
+    "t+" = "check timed out",
+    "?" = if (is.null(x$new$errormsg)) {
+      "check failed to run"
+    } else {
+      "failed to install dependencies"
+    },
+    "failed to check"
+  )
+}
+
+## rcmdcheck records `cran` in the check result, so we only know it for
+## packages that got far enough to be checked. Packages that failed earlier
+## must not be dropped from the CRAN summary just because we can't tell -
+## silently under-reporting failures is worse than mentioning a Bioconductor
+## package.
 on_cran <- function(x) {
-  isTRUE(x$new$cran)
+  if (!is.null(x$new$cran)) {
+    return(isTRUE(x$new$cran))
+  }
+
+  old <- if (inherits(x$old, "rcmdcheck")) {
+    x$old
+  } else if (length(x$old)) {
+    x$old[[1]]
+  }
+  if (inherits(old, "rcmdcheck")) {
+    return(isTRUE(old$cran))
+  }
+
+  TRUE
 }
 
 #' `revdep_report()` writes `README.md`, `problems.md`, `failures.md`, and

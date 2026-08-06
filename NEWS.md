@@ -1,5 +1,21 @@
 # 1.0.0.9002
 
+* `problems.md` no longer claims "Wow, no problems at all. :)" when revdeps
+  failed to check. It now reports how many packages could not be checked, why,
+  and points at `failures.md`.
+
+* `cran.md` no longer silently omits packages that failed before `R CMD check`
+  could run (e.g. a `PREPERROR` from a dependency that would not install), and
+  no longer prints `NA` instead of the reason a package failed to check.
+
+* `failures.md` now includes the error message for packages that failed before
+  installation, instead of an empty code block.
+
+* Reports no longer attribute the checked package's own GitHub URL and
+  maintainer email to revdeps that failed before they could be checked, which
+  happened because `desc::desc(text = NULL)` falls back to reading the
+  DESCRIPTION in the working directory.
+
 * Add `cran` parameter to the `get_repos()` internal and propagate it to the
   upstream functions including `revdep_check()`. It allow user to decide
   whether htey want to always append CRAN mirror to repos or not (@maksymis)
