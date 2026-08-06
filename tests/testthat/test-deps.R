@@ -24,6 +24,17 @@ test_that("parse_deps", {
   )
 })
 
+test_that("deps_match finds the package at both ends of the string", {
+  deps <- c(
+    "mlr3 (>= 1.0.1), R (>= 3.1.0),paradox,",
+    "R (>= 3.1.0),mlr3,paradox",
+    ",,,mlr3",
+    "mlr3misc,mlr3verse",
+    ""
+  )
+  expect_equal(deps_match(deps, "mlr3"), c(TRUE, TRUE, TRUE, FALSE, FALSE))
+})
+
 test_that("parse_deps extreme cases", {
   deps <- c(NA, "", "  ")
   expect_equal(
