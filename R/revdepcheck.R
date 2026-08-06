@@ -46,6 +46,13 @@
 #' is not already present.
 #' @param env Environment variables to set for the install and check
 #'   processes. See [revdep_env_vars()].
+#' @param skip_suggests_failures Whether to continue checking a reverse
+#'   dependency if one of its suggested packages fails to install. Packages
+#'   are supposed to guard the use of suggested packages, e.g. with
+#'   `requireNamespace()`, and `R CMD check` is run with
+#'   `_R_CHECK_FORCE_SUGGESTS_=false` by default, so the check can usually
+#'   still run. Hard dependencies (`Depends`, `Imports`, `LinkingTo`) must
+#'   always install.
 #'
 #' @seealso To see more details of problems during a run, call
 #'   [revdep_summary()] and [revdep_details()] in another process.
@@ -63,7 +70,8 @@ revdep_check <- function(
   num_workers = 1,
   bioc = TRUE,
   cran = TRUE,
-  env = revdep_env_vars()
+  env = revdep_env_vars(),
+  skip_suggests_failures = FALSE
 ) {
   pkg <- pkg_check(pkg)
   dir_setup(pkg)
@@ -96,7 +104,8 @@ revdep_check <- function(
         num_workers = num_workers,
         env = env,
         bioc = bioc,
-        cran = cran
+        cran = cran,
+        skip_suggests_failures = skip_suggests_failures
       ),
       report = revdep_final_report(pkg, bioc = bioc, cran = cran),
       done = break
@@ -231,7 +240,8 @@ revdep_run <- function(
   num_workers = 1,
   bioc = TRUE,
   env = character(),
-  cran = TRUE
+  cran = TRUE,
+  skip_suggests_failures = FALSE
 ) {
   pkg <- pkg_check(pkg)
   pkgname <- pkg_name(pkg)
@@ -253,7 +263,8 @@ revdep_run <- function(
       num_workers = num_workers,
       env = env,
       bioc = bioc,
-      cran = cran
+      cran = cran,
+      skip_suggests_failures = skip_suggests_failures
     ),
     packages = data.frame(
       package = todo,

@@ -61,10 +61,14 @@ get_repos <- function(bioc, cran) {
   repos
 }
 
-cran_deps <- function(package, repos) {
+cran_deps <- function(
+  package,
+  repos,
+  direct = c("Depends", "Imports", "LinkingTo", "Suggests")
+) {
   allpkgs <- available_packages(repos = repos)
   current <- deps <- package
-  dependencies <- c("Depends", "Imports", "LinkingTo", "Suggests")
+  dependencies <- direct
   while (TRUE) {
     deprecs <- allpkgs[allpkgs[, "Package"] %in% deps, dependencies]
     newdeps <- unlist(parse_deps(deprecs))

@@ -13,7 +13,8 @@ revdep_check(
   num_workers = 1,
   bioc = TRUE,
   cran = TRUE,
-  env = revdep_env_vars()
+  env = revdep_env_vars(),
+  skip_suggests_failures = FALSE
 )
 
 revdep_reset(pkg = ".")
@@ -38,6 +39,14 @@ is not already present.}
 
 \item{env}{Environment variables to set for the install and check
 processes. See \code{\link[=revdep_env_vars]{revdep_env_vars()}}.}
+
+\item{skip_suggests_failures}{Whether to continue checking a reverse
+dependency if one of its suggested packages fails to install. Packages
+are supposed to guard the use of suggested packages, e.g. with
+\code{requireNamespace()}, and \verb{R CMD check} is run with
+\verb{_R_CHECK_FORCE_SUGGESTS_=false} by default, so the check can usually
+still run. Hard dependencies (\code{Depends}, \code{Imports}, \code{LinkingTo}) must
+always install.}
 }
 \description{
 \code{revdep_check()} runs \verb{R CMD check} on all reverse dependencies of your

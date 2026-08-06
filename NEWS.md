@@ -1,5 +1,10 @@
 # 1.0.0.9002
 
+* `revdep_check()` gains a `skip_suggests_failures` argument. When `TRUE`, a
+  reverse dependency is still checked if one of its suggested packages fails
+  to install; only failures of hard dependencies (`Depends`, `Imports`,
+  `LinkingTo`) abort the check of that package.
+
 * Add `cran` parameter to the `get_repos()` internal and propagate it to the
   upstream functions including `revdep_check()`. It allow user to decide
   whether htey want to always append CRAN mirror to repos or not (@maksymis)
